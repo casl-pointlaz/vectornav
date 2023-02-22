@@ -9,6 +9,22 @@ of the deice and you can use rostopic to quickly get running.
 
 Check out the ROS2 branch for ROS2 Support!
 
+## This is the Pointlaz modified version
+ Last modification 2023-01-30 by CASL and Antoine Gruet.
+### How to update this version
+Since this the pointlaz modifications are contained on a branch, it is possible to isolate the modifications from the update.
+-While working on this fork, start by checking out on the master branch
+```
+git checkout master
+```
+-Then sync the fork with the update source version by using the method of your choice (see https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/syncing-a-fork)
+-Then checkout back to the Pointlaz branch and merge the updated master into the branch.
+```
+git checkout Pointlaz
+git merge master
+git push
+```
+-It's possible that the merge doesn't complete automatically depending on the complexity of Pointlaz's modifications. In this case, be prepared to do a manual merge. You can use the method of your choice, by example using CLION: check https://www.jetbrains.com/help/clion/resolving-conflicts.html#distributed-version-control-systems
 
 QuickStart Guide
 ----------------
