@@ -9,17 +9,20 @@ project(vectornav)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
     roscpp
+    sensor_msgs
     message_generation
 )
 
 add_message_files(
     FILES
     Ins.msg
+    ImuWithCount.msg
 )
 
 generate_messages(
     DEPENDENCIES
     std_msgs
+    sensor_msgs
 )
 
 ###################################
@@ -28,7 +31,7 @@ generate_messages(
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES vectornav
-   CATKIN_DEPENDS roscpp sensor_msgs
+   CATKIN_DEPENDS roscpp sensor_msgs message_runtime
 #  DEPENDS system_lib
 )
 

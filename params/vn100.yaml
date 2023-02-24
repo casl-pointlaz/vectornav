@@ -1,17 +1,38 @@
 # Defined in udev rules, change according to your system. Typically /dev/ttyUSB0
 serial_port: /dev/ttyUSB0
 
+# Added by agruet
+# Choose which mode you want to use for the output messages on the serial ports (see page 33 of the VN-100 User Manual)
+# 0 = User message is not automatically sent out either serial port.
+# 1 = Message is sent out serial port 1 at a fixed rate
+# 2 = Message is sent out serial port 2 at a fixed rate.
+# 3 = Message is sent out both serial ports at a fixed rate.
+async_mode: 2
+
 # Acceptable baud rates : 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600
 # Datasheet states 128000 works but from experiments it does not.
-serial_baud: 115200
+serial_baud: 921600
 
 # Acceptable data rates in Hz: 1, 2, 4, 5, 10, 20, 25, 40, 50, 100, 200
 # Baud rate must be able to handle the data rate
-async_output_rate: 40
+async_output_rate: 800
 
 # Device IMU Rate as set by the manufacturer (800Hz unless specified otherwise)
 # This value is used to set the serial data packet rate
 fixed_imu_rate: 800
+
+# Choose the type of timestamp you want to use
+# 0 = ROS Time
+# 1 = TimeStartup
+# 2 = TimeSyncIn
+timestamp_type: 2
+
+# When using the TimeStartup timestamp (timestamp_type: 1)
+# You can adjust its value to the ROS Time by setting this variable to true, or juste use raw TimeStartup with false
+adjust_ros_timestamp: false
+
+# True to use a custom IMU message with a "count" field, false to use a standard IMU message
+use_imu_with_syncincount_msg: true
 
 # Frame id where pose of Odom message is specified (used only for Odom header.frame_id)
 map_frame_id: map
@@ -44,3 +65,116 @@ angular_vel_covariance: [0.01,  0.0,   0.0,
 orientation_covariance: [0.01,  0.0,   0.0,
                             0.0,   0.01,  0.0,
                             0.0,   0.0,   0.01]
+
+# SyncIn configuration
+sync_in_mode: 0
+sync_in_edge: 56
+sync_in_skip_factor: 70000
+
+# Parameters to choose the fields you want to recover from the sensor
+common_group:
+  use_group:            true
+  get_timestartup:      false
+  get_timegps:          false
+  get_timesyncin:       true
+  get_yawpitchroll:     true
+  get_quaternion:       true
+  get_angularrate:      true
+  get_position:         false
+  get_velocity:         false
+  get_accel:            true
+  get_imu:              false
+  get_magpres:          true
+  get_deltatheta:       false
+  get_insstatus:        false
+  get_syncincnt:        true
+  get_timegpspps:       false
+
+time_group:
+  use_group:            false
+  get_timestartup:      false
+  get_timegps:          false
+  get_gpstow:           false
+  get_gpsweek:          false
+  get_timesyncin:       false
+  get_timegpspps:       false
+  get_timeutc:          false
+  get_syncincnt:        false
+  get_syncoutcnt:       false
+  get_timestatus:       false
+
+imu_group:
+  use_group:            false
+  get_imustatus:        false
+  get_uncompmag:        false
+  get_uncompaccel:      false
+  get_uncompgyro:       false
+  get_temp:             false
+  get_pres:             false
+  get_deltatheta:       false
+  get_deltavel:         false
+  get_mag:              false
+  get_accel:            false
+  get_angularrate:      false
+  get_senssat:          false
+
+attitude_group:
+  use_group:            true
+  get_vpestatus:        false
+  get_yawpitchroll:     false
+  get_quaternion:       false
+  get_dcm:              false
+  get_magned:           false
+  get_accelned:         false
+  get_linearaccelbody:  false
+  get_linearaccelned:   false
+  get_ypru:             true
+  get_heave:            false
+
+#gps_group:       # Not used for the VN-100 sensor, because the sensor does not have a GPS integrated
+#  use_group:            false
+#  get_utc:              false
+#  get_tow:              false
+#  get_week:             false
+#  get_numsats:          false
+#  get_fix:              false
+#  get_poslla:           false
+#  get_posecef:          false
+#  get_velned:           false
+#  get_velecef:          false
+#  get_posu:             false
+#  get_velu:             false
+#  get_timeu:            false
+#  get_timeinfo:         false
+#  get_dop:              false
+
+#gps2_group:      # Not used by the VN-100 sensor, because the sensor does not have a GPS2 integrated
+#  use_group:            false
+#  get_utc:              false
+#  get_tow:              false
+#  get_week:             false
+#  get_numsats:          false
+#  get_fix:              false
+#  get_poslla:           false
+#  get_posecef:          false
+#  get_velned:           false
+#  get_velecef:          false
+#  get_posu:             false
+#  get_velu:             false
+#  get_timeu:            false
+#  get_timeinfo:         false
+#  get_dop:              false
+
+#ins_group:       # Not used by the VN-100 sensor, because the sensor does not have a INS field
+#  use_group:            false
+#  get_insstatus:        false
+#  get_poslla:           false
+#  get_posecef:          false
+#  get_velbody:          false
+#  get_velned:           false
+#  get_velecef:          false
+#  get_magecef:          false
+#  get_accelecef:        false
+#  get_linearaccelecef:  false
+#  get_posu:             false
+#  get_velu:             false

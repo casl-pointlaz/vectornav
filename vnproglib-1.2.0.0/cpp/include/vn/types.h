@@ -79,26 +79,26 @@ enum BinaryGroup
 	BINARYGROUP_TIME = 0x02,		///< Time group.
 	BINARYGROUP_IMU = 0x04,			///< IMU group.
 	BINARYGROUP_GPS = 0x08,			///< GPS group.
-	BINARYGROUP_ATTITUDE = 0x10,	///< Attitude group.
+	BINARYGROUP_ATTITUDE = 0x10,	        ///< Attitude group.
 	BINARYGROUP_INS = 0x20,			///< INS group.
-  BINARYGROUP_GPS2 = 0x40			///< GPS2 group.
+        BINARYGROUP_GPS2 = 0x40			///< GPS2 group.
 };
 
 /// \brief Flags for the binary group 1 'Common' in the binary output registers.
 enum CommonGroup
 {
-	COMMONGROUP_NONE				= 0x0000,	///< None.
+	COMMONGROUP_NONE			= 0x0000,	///< None.
 	COMMONGROUP_TIMESTARTUP			= 0x0001,	///< TimeStartup.
-	COMMONGROUP_TIMEGPS				= 0x0002,	///< TimeGps.
+	COMMONGROUP_TIMEGPS			= 0x0002,	///< TimeGps.
 	COMMONGROUP_TIMESYNCIN			= 0x0004,	///< TimeSyncIn.
 	COMMONGROUP_YAWPITCHROLL		= 0x0008,	///< YawPitchRoll.
 	COMMONGROUP_QUATERNION			= 0x0010,	///< Quaternion.
 	COMMONGROUP_ANGULARRATE			= 0x0020,	///< AngularRate.
 	COMMONGROUP_POSITION			= 0x0040,	///< Position.
 	COMMONGROUP_VELOCITY			= 0x0080,	///< Velocity.
-	COMMONGROUP_ACCEL				= 0x0100,	///< Accel.
-	COMMONGROUP_IMU					= 0x0200,	///< Imu.
-	COMMONGROUP_MAGPRES				= 0x0400,	///< MagPres.
+	COMMONGROUP_ACCEL			= 0x0100,	///< Accel.
+	COMMONGROUP_IMU				= 0x0200,	///< Imu.
+	COMMONGROUP_MAGPRES			= 0x0400,	///< MagPres.
 	COMMONGROUP_DELTATHETA			= 0x0800,	///< DeltaTheta.
 	COMMONGROUP_INSSTATUS			= 0x1000,	///< InsStatus.
 	COMMONGROUP_SYNCINCNT			= 0x2000,	///< SyncInCnt.
@@ -108,17 +108,17 @@ enum CommonGroup
 /// \brief Flags for the binary group 2 'Time' in the binary output registers.
 enum TimeGroup
 {
-	TIMEGROUP_NONE					= 0x0000,	///< None.
+	TIMEGROUP_NONE				= 0x0000,	///< None.
 	TIMEGROUP_TIMESTARTUP			= 0x0001,	///< TimeStartup.
-	TIMEGROUP_TIMEGPS				= 0x0002,	///< TimeGps.
-	TIMEGROUP_GPSTOW				= 0x0004,	///< GpsTow.
-	TIMEGROUP_GPSWEEK				= 0x0008,	///< GpsWeek.
+	TIMEGROUP_TIMEGPS			= 0x0002,	///< TimeGps.
+	TIMEGROUP_GPSTOW			= 0x0004,	///< GpsTow.
+	TIMEGROUP_GPSWEEK			= 0x0008,	///< GpsWeek.
 	TIMEGROUP_TIMESYNCIN			= 0x0010,	///< TimeSyncIn.
 	TIMEGROUP_TIMEGPSPPS			= 0x0020,	///< TimeGpsPps.
-	TIMEGROUP_TIMEUTC				= 0x0040,	///< TimeUTC.
+	TIMEGROUP_TIMEUTC			= 0x0040,	///< TimeUTC.
 	TIMEGROUP_SYNCINCNT			= 0x0080,	///< SyncInCnt.
-  TIMEGROUP_SYNCOUTCNT    = 0x0100,	///< SyncOutCnt.
-  TIMEGROUP_TIMESTATUS    = 0x0200	///< TimeStatus.
+        TIMEGROUP_SYNCOUTCNT                    = 0x0100,	///< SyncOutCnt.
+        TIMEGROUP_TIMESTATUS                    = 0x0200	///< TimeStatus.
 };
 
 /// \brief Flags for the binary group 3 'IMU' in the binary output registers.
@@ -127,7 +127,7 @@ enum ImuGroup
 	IMUGROUP_NONE					= 0x0000,	///< None.
 	IMUGROUP_IMUSTATUS				= 0x0001,	///< ImuStatus.
 	IMUGROUP_UNCOMPMAG				= 0x0002,	///< UncompMag.
-	IMUGROUP_UNCOMPACCEL			= 0x0004,	///< UncompAccel.
+	IMUGROUP_UNCOMPACCEL			        = 0x0004,	///< UncompAccel.
 	IMUGROUP_UNCOMPGYRO				= 0x0008,	///< UncompGyro.
 	IMUGROUP_TEMP					= 0x0010,	///< Temp.
 	IMUGROUP_PRES					= 0x0020,	///< Pres.
@@ -135,7 +135,7 @@ enum ImuGroup
 	IMUGROUP_DELTAVEL				= 0x0080,	///< DeltaVel.
 	IMUGROUP_MAG					= 0x0100,	///< Mag.
 	IMUGROUP_ACCEL					= 0x0200,	///< Accel.
-	IMUGROUP_ANGULARRATE			= 0x0400,	///< AngularRate.
+	IMUGROUP_ANGULARRATE			        = 0x0400,	///< AngularRate.
 	IMUGROUP_SENSSAT				= 0x0800,	///< SensSat.
 };
 
@@ -146,31 +146,31 @@ enum GpsGroup
 	GPSGROUP_UTC					= 0x0001,	///< UTC.
 	GPSGROUP_TOW					= 0x0002,	///< Tow.
 	GPSGROUP_WEEK					= 0x0004,	///< Week.
-	GPSGROUP_NUMSATS			= 0x0008,	///< NumSats.
+	GPSGROUP_NUMSATS			        = 0x0008,	///< NumSats.
 	GPSGROUP_FIX					= 0x0010,	///< Fix.
-	GPSGROUP_POSLLA				= 0x0020,	///< PosLla.
-	GPSGROUP_POSECEF			= 0x0040,	///< PosEcef.
-	GPSGROUP_VELNED				= 0x0080,	///< VelNed.
-	GPSGROUP_VELECEF			= 0x0100,	///< VelEcef.
+	GPSGROUP_POSLLA				        = 0x0020,	///< PosLla.
+	GPSGROUP_POSECEF			        = 0x0040,	///< PosEcef.
+	GPSGROUP_VELNED				        = 0x0080,	///< VelNed.
+	GPSGROUP_VELECEF			        = 0x0100,	///< VelEcef.
 	GPSGROUP_POSU					= 0x0200,	///< PosU.
 	GPSGROUP_VELU					= 0x0400,	///< VelU.
-	GPSGROUP_TIMEU				= 0x0800,	///< TimeU.
-  GPSGROUP_TIMEINFO     = 0x1000,	///< TimeInfo.
-  GPSGROUP_DOP          = 0x2000,	///< Dop.
+	GPSGROUP_TIMEU				        = 0x0800,	///< TimeU.
+        GPSGROUP_TIMEINFO                               = 0x1000,	///< TimeInfo.
+        GPSGROUP_DOP                                    = 0x2000,	///< Dop.
 };
 
 /// \brief Flags for the binary group 5 'Attitude' in the binary output registers.
 enum AttitudeGroup
 {
 	ATTITUDEGROUP_NONE				= 0x0000,	///< None.
-	ATTITUDEGROUP_VPESTATUS			= 0x0001,	///< VpeStatus.
-	ATTITUDEGROUP_YAWPITCHROLL		= 0x0002,	///< YawPitchRoll.
-	ATTITUDEGROUP_QUATERNION		= 0x0004,	///< Quaternion.
+	ATTITUDEGROUP_VPESTATUS			        = 0x0001,	///< VpeStatus.
+	ATTITUDEGROUP_YAWPITCHROLL		        = 0x0002,	///< YawPitchRoll.
+	ATTITUDEGROUP_QUATERNION		        = 0x0004,	///< Quaternion.
 	ATTITUDEGROUP_DCM				= 0x0008,	///< DCM.
-	ATTITUDEGROUP_MAGNED			= 0x0010,	///< MagNed.
-	ATTITUDEGROUP_ACCELNED			= 0x0020,	///< AccelNed.
-	ATTITUDEGROUP_LINEARACCELBODY	= 0x0040,	///< LinearAccelBody.
-	ATTITUDEGROUP_LINEARACCELNED	= 0x0080,	///< LinearAccelNed.
+	ATTITUDEGROUP_MAGNED			        = 0x0010,	///< MagNed.
+	ATTITUDEGROUP_ACCELNED			        = 0x0020,	///< AccelNed.
+	ATTITUDEGROUP_LINEARACCELBODY	                = 0x0040,	///< LinearAccelBody.
+	ATTITUDEGROUP_LINEARACCELNED	                = 0x0080,	///< LinearAccelNed.
 	ATTITUDEGROUP_YPRU				= 0x0100,	///< YprU.
 	ATTITUDEGROUP_HEAVE				= 0x1000,	///< Heave.
 };
@@ -187,7 +187,7 @@ enum InsGroup
 	INSGROUP_VELECEF				= 0x0020,	///< VelEcef.
 	INSGROUP_MAGECEF				= 0x0040,	///< MagEcef.
 	INSGROUP_ACCELECEF				= 0x0080,	///< AccelEcef.
-	INSGROUP_LINEARACCELECEF		= 0x0100,	///< LinearAccelEcef.
+	INSGROUP_LINEARACCELECEF		        = 0x0100,	///< LinearAccelEcef.
 	INSGROUP_POSU					= 0x0200,	///< PosU.
 	INSGROUP_VELU					= 0x0400,	///< VelU.
 };

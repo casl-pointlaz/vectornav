@@ -43,7 +43,9 @@
 #include "sensor_msgs/Temperature.h"
 #include "std_srvs/Empty.h"
 
-ros::Publisher pubIMU, pubMag, pubGPS, pubOdom, pubTemp, pubPres, pubIns;
+#include <vectornav/ImuWithCount.h>
+
+ros::Publisher pubIMUWithCount, pubIMU, pubMag, pubGPS, pubOdom, pubTemp, pubPres, pubIns;
 ros::ServiceServer resetOdomSrv;
 
 XmlRpc::XmlRpcValue rpc_temp;
@@ -61,6 +63,16 @@ using namespace vn::xplat;
 
 // Method declarations for future use.
 void BinaryAsyncMessageReceived(void * userData, Packet & p, size_t index);
+vn::protocol::uart::SyncInMode syncInModeSetUp(int sync_in_mode);
+vn::protocol::uart::SyncInEdge syncInEdgeSetUp(int sync_in_edge);
+uint16_t syncInSkipFactor(int sync_in_skip_factor);
+vn::protocol::uart::CommonGroup getCommonGroupSetUp(ros::NodeHandle pn);
+vn::protocol::uart::TimeGroup getTimeGroupSetUp(ros::NodeHandle pn);
+vn::protocol::uart::ImuGroup getImuGroupSetUp(ros::NodeHandle pn);
+vn::protocol::uart::GpsGroup getGpsGroupSetUp(ros::NodeHandle pn);
+vn::protocol::uart::GpsGroup getGps2GroupSetUp(ros::NodeHandle pn);
+vn::protocol::uart::AttitudeGroup getAttitudeGroupSetUp(ros::NodeHandle pn);
+vn::protocol::uart::InsGroup getInsGroupSetUp(ros::NodeHandle pn);
 
 // Custom user data to pass to packet callback function
 struct UserData
@@ -87,6 +99,10 @@ struct UserData
   double average_time_difference{0};
   ros::Time ros_start_time;
   bool adjust_ros_timestamp{false};
+  int timestamp_type;
+
+  // Use IMU msg with count field or not
+  bool use_imu_with_syncincount_msg{false};
 
   // strides
   unsigned int imu_stride;
@@ -157,14 +173,6 @@ int main(int argc, char * argv[])
   ros::NodeHandle n;
   ros::NodeHandle pn("~");
 
-  pubIMU = n.advertise<sensor_msgs::Imu>("vectornav/IMU", 1000);
-  pubMag = n.advertise<sensor_msgs::MagneticField>("vectornav/Mag", 1000);
-  pubGPS = n.advertise<sensor_msgs::NavSatFix>("vectornav/GPS", 1000);
-  pubOdom = n.advertise<nav_msgs::Odometry>("vectornav/Odom", 1000);
-  pubTemp = n.advertise<sensor_msgs::Temperature>("vectornav/Temp", 1000);
-  pubPres = n.advertise<sensor_msgs::FluidPressure>("vectornav/Pres", 1000);
-  pubIns = n.advertise<vectornav::Ins>("vectornav/INS", 1000);
-
   resetOdomSrv = n.advertiseService<std_srvs::Empty::Request, std_srvs::Empty::Response>(
     "reset_odom", boost::bind(&resetOdom, _1, _2, &user_data));
 
@@ -177,6 +185,10 @@ int main(int argc, char * argv[])
   // Sensor IMURATE (800Hz by default, used to configure device)
   int SensorImuRate;
 
+  int async_mode;
+
+  int sync_in_mode, sync_in_edge, sync_in_skip_factor;
+
   // Load all params
   pn.param<std::string>("map_frame_id", user_data.map_frame_id, "map");
   pn.param<std::string>("frame_id", user_data.frame_id, "vectornav");
@@ -188,6 +200,12 @@ int main(int argc, char * argv[])
   pn.param<std::string>("serial_port", SensorPort, "/dev/ttyUSB0");
   pn.param<int>("serial_baud", SensorBaudrate, 115200);
   pn.param<int>("fixed_imu_rate", SensorImuRate, 800);
+  pn.param<int>("async_mode", async_mode, 2);
+  pn.param<int>("timestamp_type", user_data.timestamp_type, 2);
+  pn.param<bool>("use_imu_with_syncincount_msg", user_data.use_imu_with_syncincount_msg, true);
+  pn.param<int>("sync_in_mode", sync_in_mode, 3);
+  pn.param<int>("sync_in_edge", sync_in_edge, 0);
+  pn.param<int>("sync_in_skip_factor", sync_in_skip_factor, 1);
 
   //Call to set covariances
   if (pn.getParam("linear_accel_covariance", rpc_temp)) {
@@ -277,7 +295,7 @@ int main(int argc, char * argv[])
   // calculate the least common multiple of the two rate and assure it is a
   // valid package rate, also calculate the imu and output strides
   int package_rate = 0;
-  for (int allowed_rate : {1, 2, 4, 5, 10, 20, 25, 40, 50, 100, 200, 0}) {
+  for (int allowed_rate : {800, 1, 2, 4, 5, 10, 20, 25, 40, 50, 100, 200, 400, 0}) {
     package_rate = allowed_rate;
     if ((package_rate % async_output_rate) == 0 && (package_rate % imu_output_rate) == 0) break;
   }
@@ -292,16 +310,51 @@ int main(int argc, char * argv[])
   ROS_INFO("General Publish Rate: %d Hz", async_output_rate);
   ROS_INFO("IMU Publish Rate: %d Hz", imu_output_rate);
 
+  // SyncIn SetUp
+  vn::protocol::uart::SyncInMode uart_sync_in_mode =  syncInModeSetUp(sync_in_mode);
+  vn::protocol::uart::SyncInEdge uart_sync_in_edge = syncInEdgeSetUp(sync_in_edge);
+  uint16_t uart_sync_in_skip_factor = syncInSkipFactor(sync_in_skip_factor);
+  vs.writeSynchronizationControl(uart_sync_in_mode, uart_sync_in_edge, uart_sync_in_skip_factor, SYNCOUTMODE_NONE, SYNCOUTPOLARITY_NEGATIVE, 1, 100000000, true);
+
+  // Binary Group SetUp
+  vn::protocol::uart::CommonGroup commonGroupSetUp = getCommonGroupSetUp(pn);
+  vn::protocol::uart::TimeGroup timeGroupSetUp = getTimeGroupSetUp(pn);
+  vn::protocol::uart::ImuGroup imuGroupSetUp = getImuGroupSetUp(pn);
+  vn::protocol::uart::GpsGroup gpsGroupSetUp = getGpsGroupSetUp(pn);
+  vn::protocol::uart::GpsGroup gps2GroupSetUp = getGps2GroupSetUp(pn);
+  vn::protocol::uart::AttitudeGroup attitudeGroupSetUp = getAttitudeGroupSetUp(pn);
+  vn::protocol::uart::InsGroup insGroupSetUp = getInsGroupSetUp(pn);
+
   // Set the device info for passing to the packet callback function
   user_data.device_family = vs.determineDeviceFamily();
+
+  // Declare publishers
+  if (user_data.use_imu_with_syncincount_msg)   // Publisher declaration depending on wanted IMU msg
+    pubIMUWithCount = n.advertise<vectornav::ImuWithCount>("vectornav/IMU", 1000);
+  else
+    pubIMU = n.advertise<sensor_msgs::Imu>("vectornav/IMU", 1000);
+
+  if ((commonGroupSetUp & COMMONGROUP_MAGPRES) || (imuGroupSetUp & IMUGROUP_MAG))
+    pubMag = n.advertise<sensor_msgs::MagneticField>("vectornav/Mag", 1000);
+  if ((commonGroupSetUp & COMMONGROUP_MAGPRES) || (imuGroupSetUp & IMUGROUP_TEMP))
+    pubTemp = n.advertise<sensor_msgs::Temperature>("vectornav/Temp", 1000);
+  if ((commonGroupSetUp & COMMONGROUP_MAGPRES) || (imuGroupSetUp & IMUGROUP_PRES))
+    pubPres = n.advertise<sensor_msgs::FluidPressure>("vectornav/Pres", 1000);
+
+  if (user_data.device_family != VnSensor::Family::VnSensor_Family_Vn100)
+    pubOdom = n.advertise<nav_msgs::Odometry>("vectornav/Odom", 1000);
+  if (user_data.device_family != VnSensor::Family::VnSensor_Family_Vn100 && (gpsGroupSetUp != 0 || gps2GroupSetUp != 0))
+    pubGPS = n.advertise<sensor_msgs::NavSatFix>("vectornav/GPS", 1000);
+  if (user_data.device_family != VnSensor::Family::VnSensor_Family_Vn100 && insGroupSetUp != 0)
+    pubIns = n.advertise<vectornav::Ins>("vectornav/INS", 1000);
 
   // Make sure no generic async output is registered
   vs.writeAsyncDataOutputType(VNOFF);
 
   // Configure binary output message
-  BinaryOutputRegister bor(
-    ASYNCMODE_PORT1,
-    SensorImuRate / package_rate,  // update rate [ms]
+  /*BinaryOutputRegister bor(
+    async_mode,
+    SensorImuRate / 800,  // update rate [ms]
     COMMONGROUP_QUATERNION | COMMONGROUP_YAWPITCHROLL | COMMONGROUP_ANGULARRATE |
       COMMONGROUP_POSITION | COMMONGROUP_ACCEL | COMMONGROUP_MAGPRES |
       (user_data.adjust_ros_timestamp ? COMMONGROUP_TIMESTARTUP : 0),
@@ -310,7 +363,19 @@ int main(int argc, char * argv[])
     ATTITUDEGROUP_YPRU,  //<-- returning yaw pitch roll uncertainties
     INSGROUP_INSSTATUS | INSGROUP_POSECEF | INSGROUP_VELBODY | INSGROUP_ACCELECEF |
       INSGROUP_VELNED | INSGROUP_POSU | INSGROUP_VELU,
-    GPSGROUP_NONE);
+    GPSGROUP_NONE); */
+
+
+  BinaryOutputRegister bor(
+    async_mode,
+    SensorImuRate / package_rate,  // update rate [ms]
+    commonGroupSetUp,
+    timeGroupSetUp,
+    imuGroupSetUp,
+    gpsGroupSetUp,
+    attitudeGroupSetUp,
+    insGroupSetUp,
+    gps2GroupSetUp);
 
   // An empty output register for disabling output 2 and 3 if previously set
   BinaryOutputRegister bor_none(
@@ -722,30 +787,46 @@ void fill_ins_message(
   }
 }
 
-static ros::Time get_time_stamp(
-  vn::sensors::CompositeData & cd, UserData * user_data, const ros::Time & ros_time)
+static ros::Time get_time_stamp(vn::sensors::CompositeData & cd, UserData * user_data, const ros::Time & ros_time)
 {
-  if (!cd.hasTimeStartup() || !user_data->adjust_ros_timestamp) {
-    return (ros_time);  // don't adjust timestamp
+  // Conditions to use TimeSyncIn as timestamp
+  if (user_data->timestamp_type == 2 && cd.hasTimeSyncIn())
+  {
+    return ros::Time(cd.timeSyncIn() * 1e-9);
   }
-  const double sensor_time = cd.timeStartup() * 1e-9;  // time in seconds
-  if (user_data->average_time_difference == 0) {       // first call
-    user_data->ros_start_time = ros_time;
-    user_data->average_time_difference = static_cast<double>(-sensor_time);
-  }
-  // difference between node startup and current ROS time
-  const double ros_dt = (ros_time - user_data->ros_start_time).toSec();
-  // difference between elapsed ROS time and time since sensor startup
-  const double dt = ros_dt - sensor_time;
-  // compute exponential moving average
-  const double alpha = 0.001;  // average over rougly 1000 samples
-  user_data->average_time_difference =
-    user_data->average_time_difference * (1.0 - alpha) + alpha * dt;
 
-  // adjust sensor time by average difference to ROS time
-  const ros::Time adj_time =
-    user_data->ros_start_time + ros::Duration(user_data->average_time_difference + sensor_time);
-  return (adj_time);
+  // Conditions to use TimeStartup not adjusted to ROS Time as timestamp
+  else if (user_data->timestamp_type == 1 && cd.hasTimeStartup() && !user_data->adjust_ros_timestamp)
+  {
+    return ros::Time(cd.timeStartup() * 1e-9);
+  }
+
+  // Conditions to use TimeStartup adjusted to ROS Time as timestamp
+  else if (user_data->timestamp_type == 1 && cd.hasTimeStartup() && user_data->adjust_ros_timestamp)
+  {
+    const double sensor_time = cd.timeStartup() * 1e-9;  // time in seconds
+    if (user_data->average_time_difference == 0) {       // first call
+      user_data->ros_start_time = ros_time;
+      user_data->average_time_difference = static_cast<double>(-sensor_time);
+    }
+    // difference between node startup and current ROS time
+    const double ros_dt = (ros_time - user_data->ros_start_time).toSec();
+    // difference between elapsed ROS time and time since sensor startup
+    const double dt = ros_dt - sensor_time;
+    // compute exponential moving average
+    const double alpha = 0.001;  // average over rougly 1000 samples
+    user_data->average_time_difference =
+      user_data->average_time_difference * (1.0 - alpha) + alpha * dt;
+
+    // adjust sensor time by average difference to ROS time
+    const ros::Time adj_time =
+      user_data->ros_start_time + ros::Duration(user_data->average_time_difference + sensor_time);
+    return (adj_time);
+  }
+
+  // If no previous conditions are satisfied, use ROS Time as timestamp
+  else
+    return (ros_time);
 }
 
 //
@@ -764,10 +845,18 @@ void BinaryAsyncMessageReceived(void * userData, Packet & p, size_t index)
   ros::Time time = get_time_stamp(cd, user_data, ros_time);
 
   // IMU
-  if ((pkg_count % user_data->imu_stride) == 0 && pubIMU.getNumSubscribers() > 0) {
+  if ((pkg_count % user_data->imu_stride) == 0) {
     sensor_msgs::Imu msgIMU;
     fill_imu_message(msgIMU, cd, time, user_data);
-    pubIMU.publish(msgIMU);
+    if(user_data->use_imu_with_syncincount_msg && cd.hasSyncInCnt())
+    {
+      vectornav::ImuWithCount msgIMUWithCount;
+      msgIMUWithCount.imu = msgIMU;
+      msgIMUWithCount.count = cd.syncInCnt();
+      pubIMUWithCount.publish(msgIMUWithCount);
+    }
+    else
+      pubIMU.publish(msgIMU);
   }
 
   if ((pkg_count % user_data->output_stride) == 0) {
@@ -820,4 +909,373 @@ void BinaryAsyncMessageReceived(void * userData, Packet & p, size_t index)
     }
   }
   pkg_count += 1;
+}
+
+vn::protocol::uart::CommonGroup getCommonGroupSetUp(ros::NodeHandle pn)
+{
+  vn::protocol::uart::CommonGroup commonGroupSetUp;
+  bool use_group;
+  pn.param<bool>("common_group/use_group", use_group, false);
+  if(use_group)
+  {
+    bool get_timestartup, get_timegps, get_timesyncin, get_yawpitchroll, get_quaternion,
+      get_angularrate, get_position, get_velocity, get_accel, get_imu, get_magpres,
+      get_deltatheta, get_insstatus, get_syncincnt, get_timegpspps;
+
+    // Get activation parameters
+    pn.param<bool>("common_group/get_timestartup", get_timestartup, false);
+    pn.param<bool>("common_group/get_timegps", get_timegps, false);
+    pn.param<bool>("common_group/get_timesyncin", get_timesyncin, false);
+    pn.param<bool>("common_group/get_yawpitchroll", get_yawpitchroll, false);
+    pn.param<bool>("common_group/get_quaternion", get_quaternion, false);
+    pn.param<bool>("common_group/get_angularrate", get_angularrate, false);
+    pn.param<bool>("common_group/get_position", get_position, false);
+    pn.param<bool>("common_group/get_velocity", get_velocity, false);
+    pn.param<bool>("common_group/get_accel", get_accel, false);
+    pn.param<bool>("common_group/get_imu", get_imu, false);
+    pn.param<bool>("common_group/get_magpres", get_magpres, false);
+    pn.param<bool>("common_group/get_deltatheta", get_deltatheta, false);
+    pn.param<bool>("common_group/get_insstatus", get_insstatus, false);
+    pn.param<bool>("common_group/get_syncincnt", get_syncincnt, false);
+    pn.param<bool>("common_group/get_timegpspps", get_timegpspps, false);
+
+    // Set up the Common Group wanted fields depending on parameters
+    commonGroupSetUp = (get_timestartup ? COMMONGROUP_TIMESTARTUP : COMMONGROUP_NONE) |
+                       (get_timegps ? COMMONGROUP_TIMEGPS : COMMONGROUP_NONE) |
+                       (get_timesyncin ? COMMONGROUP_TIMESYNCIN : COMMONGROUP_NONE) |
+                       (get_yawpitchroll ? COMMONGROUP_YAWPITCHROLL : COMMONGROUP_NONE) |
+                       (get_quaternion ? COMMONGROUP_QUATERNION : COMMONGROUP_NONE) |
+                       (get_angularrate ? COMMONGROUP_ANGULARRATE : COMMONGROUP_NONE) |
+                       (get_position ? COMMONGROUP_POSITION : COMMONGROUP_NONE) |
+                       (get_velocity ? COMMONGROUP_VELOCITY : COMMONGROUP_NONE) |
+                       (get_accel ? COMMONGROUP_ACCEL : COMMONGROUP_NONE) |
+                       (get_imu ? COMMONGROUP_IMU : COMMONGROUP_NONE) |
+                       (get_magpres ? COMMONGROUP_MAGPRES : COMMONGROUP_NONE) |
+                       (get_deltatheta ? COMMONGROUP_DELTATHETA : COMMONGROUP_NONE) |
+                       (get_insstatus ? COMMONGROUP_INSSTATUS : COMMONGROUP_NONE) |
+                       (get_syncincnt ? COMMONGROUP_SYNCINCNT : COMMONGROUP_NONE) |
+                       (get_timegpspps ? COMMONGROUP_TIMEGPSPPS : COMMONGROUP_NONE);
+  }
+  else
+  {
+    commonGroupSetUp = COMMONGROUP_NONE;
+  }
+  return commonGroupSetUp;
+}
+
+
+vn::protocol::uart::TimeGroup getTimeGroupSetUp(ros::NodeHandle pn)
+{
+  vn::protocol::uart::TimeGroup timeGroupSetUp;
+  bool use_group;
+  pn.param<bool>("time_group/use_group", use_group, false);
+  if(use_group)
+  {
+    bool get_timestartup, get_timegps, get_gpstow, get_gpsweek, get_timesyncin,
+      get_timegpspps, get_timeutc, get_syncincnt, get_syncoutcnt, get_timestatus;
+
+    // Get activation parameters
+    pn.param<bool>("time_group/get_timestartup", get_timestartup, false);
+    pn.param<bool>("time_group/get_timegps", get_timegps, false);
+    pn.param<bool>("time_group/get_gpstow", get_gpstow, false);
+    pn.param<bool>("time_group/get_gpsweek", get_gpsweek, false);
+    pn.param<bool>("time_group/get_timesyncin", get_timesyncin, false);
+    pn.param<bool>("time_group/get_timegpspps", get_timegpspps, false);
+    pn.param<bool>("time_group/get_timeutc", get_timeutc, false);
+    pn.param<bool>("time_group/get_syncincnt", get_syncincnt, false);
+    pn.param<bool>("time_group/get_syncoutcnt", get_syncoutcnt, false);
+    pn.param<bool>("time_group/get_timestatus", get_timestatus, false);
+
+    // Set up the Common Group wanted fields depending on parameters
+    timeGroupSetUp = (get_timestartup ? TIMEGROUP_TIMESTARTUP : TIMEGROUP_NONE) |
+                       (get_timegps ? TIMEGROUP_TIMEGPS : TIMEGROUP_NONE) |
+                       (get_gpstow ? TIMEGROUP_GPSTOW : TIMEGROUP_NONE) |
+                       (get_gpsweek ? TIMEGROUP_GPSWEEK : TIMEGROUP_NONE) |
+                       (get_timesyncin ? TIMEGROUP_TIMESYNCIN : TIMEGROUP_NONE) |
+                       (get_timegpspps ? TIMEGROUP_TIMEGPSPPS : TIMEGROUP_NONE) |
+                       (get_timeutc ? TIMEGROUP_TIMEUTC : TIMEGROUP_NONE) |
+                       (get_syncincnt ? TIMEGROUP_SYNCINCNT : TIMEGROUP_NONE) |
+                       (get_syncoutcnt ? TIMEGROUP_SYNCOUTCNT : TIMEGROUP_NONE) |
+                       (get_timestatus ? TIMEGROUP_TIMESTATUS : TIMEGROUP_NONE);
+  }
+  else
+  {
+    timeGroupSetUp = TIMEGROUP_NONE;
+  }
+  return timeGroupSetUp;
+}
+
+vn::protocol::uart::ImuGroup getImuGroupSetUp(ros::NodeHandle pn)
+{
+  vn::protocol::uart::ImuGroup imuGroupSetUp;
+  bool use_group;
+  pn.param<bool>("imu_group/use_group", use_group, false);
+  if(use_group)
+  {
+    bool get_imustatus, get_uncompmag, get_uncompaccel, get_uncompgyro, get_temp, get_pres,
+      get_deltatheta, get_deltavel, get_mag, get_accel, get_angularrate, get_senssat;
+
+    // Get activation parameters
+    pn.param<bool>("imu_group/get_imustatus", get_imustatus, false);
+    pn.param<bool>("imu_group/get_uncompmag", get_uncompmag, false);
+    pn.param<bool>("imu_group/get_uncompaccel", get_uncompaccel, false);
+    pn.param<bool>("imu_group/get_uncompgyro", get_uncompgyro, false);
+    pn.param<bool>("imu_group/get_temp", get_temp, false);
+    pn.param<bool>("imu_group/get_pres", get_pres, false);
+    pn.param<bool>("imu_group/get_deltatheta", get_deltatheta, false);
+    pn.param<bool>("imu_group/get_deltavel", get_deltavel, false);
+    pn.param<bool>("imu_group/get_mag", get_mag, false);
+    pn.param<bool>("imu_group/get_accel", get_accel, false);
+    pn.param<bool>("imu_group/get_angularrate", get_angularrate, false);
+    pn.param<bool>("imu_group/get_senssat", get_senssat, false);
+
+    // Set up the Common Group wanted fields depending on parameters
+    imuGroupSetUp = (get_imustatus ? IMUGROUP_IMUSTATUS : IMUGROUP_NONE) |
+                     (get_uncompmag ? IMUGROUP_UNCOMPMAG : IMUGROUP_NONE) |
+                     (get_uncompaccel ? IMUGROUP_UNCOMPACCEL : IMUGROUP_NONE) |
+                     (get_uncompgyro ? IMUGROUP_UNCOMPGYRO : IMUGROUP_NONE) |
+                     (get_temp ? IMUGROUP_TEMP : IMUGROUP_NONE) |
+                     (get_pres ? IMUGROUP_PRES : IMUGROUP_NONE) |
+                     (get_deltatheta ? IMUGROUP_DELTATHETA : IMUGROUP_NONE) |
+                     (get_deltavel ? IMUGROUP_DELTAVEL : IMUGROUP_NONE) |
+                     (get_mag ? IMUGROUP_MAG : IMUGROUP_NONE) |
+                     (get_accel ? IMUGROUP_ACCEL : IMUGROUP_NONE) |
+                     (get_angularrate ? IMUGROUP_ANGULARRATE : IMUGROUP_NONE) |
+                     (get_senssat ? IMUGROUP_SENSSAT : IMUGROUP_NONE);
+  }
+  else
+  {
+    imuGroupSetUp = IMUGROUP_NONE;
+  }
+  return imuGroupSetUp;
+}
+vn::protocol::uart::GpsGroup getGpsGroupSetUp(ros::NodeHandle pn)
+{
+  vn::protocol::uart::GpsGroup gpsGroupSetUp;
+  bool use_group;
+  pn.param<bool>("gps_group/use_group", use_group, false);
+  if(use_group)
+  {
+    bool get_utc, get_tow, get_week, get_numsats, get_fix, get_poslla, get_posecef, get_velned,
+      get_velecef, get_posu, get_velu, get_timeu, get_timeinfo, get_dop;
+
+    // Get activation parameters
+    pn.param<bool>("gps_group/get_utc", get_utc, false);
+    pn.param<bool>("gps_group/get_tow", get_tow, false);
+    pn.param<bool>("gps_group/get_week", get_week, false);
+    pn.param<bool>("gps_group/get_numsats", get_numsats, false);
+    pn.param<bool>("gps_group/get_fix", get_fix, false);
+    pn.param<bool>("gps_group/get_poslla", get_poslla, false);
+    pn.param<bool>("gps_group/get_posecef", get_posecef, false);
+    pn.param<bool>("gps_group/get_velned", get_velned, false);
+    pn.param<bool>("gps_group/get_velecef", get_velecef, false);
+    pn.param<bool>("gps_group/get_posu", get_posu, false);
+    pn.param<bool>("gps_group/get_velu", get_velu, false);
+    pn.param<bool>("gps_group/get_timeu", get_timeu, false);
+    pn.param<bool>("gps_group/get_timeinfo", get_timeinfo, false);
+    pn.param<bool>("gps_group/get_dop", get_dop, false);
+
+    // Set up the Common Group wanted fields depending on parameters
+    gpsGroupSetUp = (get_utc ? GPSGROUP_UTC : GPSGROUP_NONE) |
+                    (get_tow ? GPSGROUP_TOW : GPSGROUP_NONE) |
+                    (get_week ? GPSGROUP_WEEK : GPSGROUP_NONE) |
+                    (get_numsats ? GPSGROUP_NUMSATS : GPSGROUP_NONE) |
+                    (get_fix ? GPSGROUP_FIX : GPSGROUP_NONE) |
+                    (get_poslla ? GPSGROUP_POSLLA : GPSGROUP_NONE) |
+                    (get_posecef ? GPSGROUP_POSECEF : GPSGROUP_NONE) |
+                    (get_velned ? GPSGROUP_VELNED : GPSGROUP_NONE) |
+                    (get_velecef ? GPSGROUP_VELECEF : GPSGROUP_NONE) |
+                    (get_posu ? GPSGROUP_POSU : GPSGROUP_NONE) |
+                    (get_velu ? GPSGROUP_VELU : GPSGROUP_NONE) |
+                    (get_timeu ? GPSGROUP_TIMEU : GPSGROUP_NONE) |
+                    (get_timeinfo ? GPSGROUP_TIMEINFO : GPSGROUP_NONE) |
+                    (get_dop ? GPSGROUP_DOP : GPSGROUP_NONE);
+  }
+  else
+  {
+    gpsGroupSetUp = GPSGROUP_NONE;
+  }
+  return gpsGroupSetUp;
+}
+
+vn::protocol::uart::GpsGroup getGps2GroupSetUp(ros::NodeHandle pn)
+{
+  vn::protocol::uart::GpsGroup gps2GroupSetUp;
+  bool use_group;
+  pn.param<bool>("gps2_group/use_group", use_group, false);
+  if(use_group)
+  {
+    bool get_utc, get_tow, get_week, get_numsats, get_fix, get_poslla, get_posecef, get_velned,
+      get_velecef, get_posu, get_velu, get_timeu, get_timeinfo, get_dop;
+
+    // Get activation parameters
+    pn.param<bool>("gps2_group/get_utc", get_utc, false);
+    pn.param<bool>("gps2_group/get_tow", get_tow, false);
+    pn.param<bool>("gps2_group/get_week", get_week, false);
+    pn.param<bool>("gps2_group/get_numsats", get_numsats, false);
+    pn.param<bool>("gps2_group/get_fix", get_fix, false);
+    pn.param<bool>("gps2_group/get_poslla", get_poslla, false);
+    pn.param<bool>("gps2_group/get_posecef", get_posecef, false);
+    pn.param<bool>("gps2_group/get_velned", get_velned, false);
+    pn.param<bool>("gps2_group/get_velecef", get_velecef, false);
+    pn.param<bool>("gps2_group/get_posu", get_posu, false);
+    pn.param<bool>("gps2_group/get_velu", get_velu, false);
+    pn.param<bool>("gps2_group/get_timeu", get_timeu, false);
+    pn.param<bool>("gps2_group/get_timeinfo", get_timeinfo, false);
+    pn.param<bool>("gps2_group/get_dop", get_dop, false);
+
+    // Set up the Common Group wanted fields depending on parameters
+    gps2GroupSetUp = (get_utc ? GPSGROUP_UTC : GPSGROUP_NONE) |
+                    (get_tow ? GPSGROUP_TOW : GPSGROUP_NONE) |
+                    (get_week ? GPSGROUP_WEEK : GPSGROUP_NONE) |
+                    (get_numsats ? GPSGROUP_NUMSATS : GPSGROUP_NONE) |
+                    (get_fix ? GPSGROUP_FIX : GPSGROUP_NONE) |
+                    (get_poslla ? GPSGROUP_POSLLA : GPSGROUP_NONE) |
+                    (get_posecef ? GPSGROUP_POSECEF : GPSGROUP_NONE) |
+                    (get_velned ? GPSGROUP_VELNED : GPSGROUP_NONE) |
+                    (get_velecef ? GPSGROUP_VELECEF : GPSGROUP_NONE) |
+                    (get_posu ? GPSGROUP_POSU : GPSGROUP_NONE) |
+                    (get_velu ? GPSGROUP_VELU : GPSGROUP_NONE) |
+                    (get_timeu ? GPSGROUP_TIMEU : GPSGROUP_NONE) |
+                    (get_timeinfo ? GPSGROUP_TIMEINFO : GPSGROUP_NONE) |
+                    (get_dop ? GPSGROUP_DOP : GPSGROUP_NONE);
+  }
+  else
+  {
+    gps2GroupSetUp = GPSGROUP_NONE;
+  }
+  return gps2GroupSetUp;
+}
+
+vn::protocol::uart::AttitudeGroup getAttitudeGroupSetUp(ros::NodeHandle pn)
+{
+  vn::protocol::uart::AttitudeGroup attitudeGroupSetUp;
+  bool use_group;
+  pn.param<bool>("attitude_group/use_group", use_group, false);
+  if(use_group)
+  {
+    bool get_vpestatus, get_yawpitchroll, get_quaternion, get_dcm, get_magned, get_accelned,
+      get_linearaccelbody, get_linearaccelned, get_ypru, get_heave;
+
+    // Get activation parameters
+    pn.param<bool>("attitude_group/get_vpestatus", get_vpestatus, false);
+    pn.param<bool>("attitude_group/get_yawpitchroll", get_yawpitchroll, false);
+    pn.param<bool>("attitude_group/get_quaternion", get_quaternion, false);
+    pn.param<bool>("attitude_group/get_dcm", get_dcm, false);
+    pn.param<bool>("attitude_group/get_magned", get_magned, false);
+    pn.param<bool>("attitude_group/get_accelned", get_accelned, false);
+    pn.param<bool>("attitude_group/get_linearaccelbody", get_linearaccelbody, false);
+    pn.param<bool>("attitude_group/get_linearaccelned", get_linearaccelned, false);
+    pn.param<bool>("attitude_group/get_ypru", get_ypru, false);
+    pn.param<bool>("attitude_group/get_heave", get_heave, false);
+
+    // Set up the Common Group wanted fields depending on parameters
+    attitudeGroupSetUp = (get_vpestatus ? ATTITUDEGROUP_VPESTATUS : ATTITUDEGROUP_NONE) |
+                     (get_yawpitchroll ? ATTITUDEGROUP_YAWPITCHROLL : ATTITUDEGROUP_NONE) |
+                     (get_quaternion ? ATTITUDEGROUP_QUATERNION : ATTITUDEGROUP_NONE) |
+                     (get_dcm ? ATTITUDEGROUP_DCM : ATTITUDEGROUP_NONE) |
+                     (get_magned ? ATTITUDEGROUP_MAGNED : ATTITUDEGROUP_NONE) |
+                     (get_accelned ? ATTITUDEGROUP_ACCELNED : ATTITUDEGROUP_NONE) |
+                     (get_linearaccelbody ? ATTITUDEGROUP_LINEARACCELBODY : ATTITUDEGROUP_NONE) |
+                     (get_linearaccelned ? ATTITUDEGROUP_LINEARACCELNED : ATTITUDEGROUP_NONE) |
+                     (get_ypru ? ATTITUDEGROUP_YPRU : ATTITUDEGROUP_NONE) |
+                     (get_heave ? ATTITUDEGROUP_HEAVE : ATTITUDEGROUP_NONE);
+  }
+  else
+  {
+    attitudeGroupSetUp = ATTITUDEGROUP_NONE;
+  }
+  return attitudeGroupSetUp;
+}
+
+vn::protocol::uart::InsGroup getInsGroupSetUp(ros::NodeHandle pn)
+{
+  vn::protocol::uart::InsGroup insGroupSetUp;
+  bool use_group;
+  pn.param<bool>("ins_group/use_group", use_group, false);
+  if(use_group)
+  {
+    bool get_insstatus, get_poslla, get_posecef, get_velbody, get_velned, get_velecef, get_magecef,
+      get_accelecef, get_linearaccelecef, get_posu, get_velu;
+
+    // Get activation parameters
+    pn.param<bool>("ins_group/get_insstatus", get_insstatus, false);
+    pn.param<bool>("ins_group/get_poslla", get_poslla, false);
+    pn.param<bool>("ins_group/get_posecef", get_posecef, false);
+    pn.param<bool>("ins_group/get_velbody", get_velbody, false);
+    pn.param<bool>("ins_group/get_velned", get_velned, false);
+    pn.param<bool>("ins_group/get_velecef", get_velecef, false);
+    pn.param<bool>("ins_group/get_magecef", get_magecef, false);
+    pn.param<bool>("ins_group/get_accelecef", get_accelecef, false);
+    pn.param<bool>("ins_group/get_linearaccelecef", get_linearaccelecef, false);
+    pn.param<bool>("ins_group/get_posu", get_posu, false);
+    pn.param<bool>("ins_group/get_velu", get_velu, false);
+
+    // Set up the Common Group wanted fields depending on parameters
+    insGroupSetUp = (get_insstatus ? INSGROUP_INSSTATUS : INSGROUP_NONE) |
+                         (get_poslla ? INSGROUP_POSLLA : INSGROUP_NONE) |
+                         (get_posecef ? INSGROUP_POSECEF : INSGROUP_NONE) |
+                         (get_velbody ? INSGROUP_VELBODY : INSGROUP_NONE) |
+                         (get_velned ? INSGROUP_VELNED : INSGROUP_NONE) |
+                         (get_velecef ? INSGROUP_VELECEF : INSGROUP_NONE) |
+                         (get_magecef ? INSGROUP_MAGECEF : INSGROUP_NONE) |
+                         (get_accelecef ? INSGROUP_ACCELECEF : INSGROUP_NONE) |
+                         (get_linearaccelecef ? INSGROUP_LINEARACCELECEF : INSGROUP_NONE) |
+                         (get_posu ? INSGROUP_POSU : INSGROUP_NONE) |
+                         (get_velu ? INSGROUP_VELU : INSGROUP_NONE);
+  }
+  else
+  {
+    insGroupSetUp = INSGROUP_NONE;
+  }
+  return insGroupSetUp;
+}
+
+vn::protocol::uart::SyncInMode syncInModeSetUp(int sync_in_mode)
+{
+  vn::protocol::uart::SyncInMode uart_sync_in_mode;
+  if(sync_in_mode == 3)
+    uart_sync_in_mode = SYNCINMODE_COUNT;
+  else if(sync_in_mode == 4)
+    uart_sync_in_mode = SYNCINMODE_IMU;
+  else if(sync_in_mode == 5)
+    uart_sync_in_mode = SYNCINMODE_ASYNC;
+  else if(sync_in_mode == 6)
+    uart_sync_in_mode = SYNCINMODE_ASYNC3;
+  else
+  {
+    uart_sync_in_mode = SYNCINMODE_COUNT;
+    ROS_WARN("The SyncInMode value you positioned does not exist. SyncInMode positioned to the default value.");
+  }
+  ROS_INFO("SyncInMode = %d", uart_sync_in_mode);
+  return uart_sync_in_mode;
+}
+
+vn::protocol::uart::SyncInEdge syncInEdgeSetUp(int sync_in_edge)
+{
+  vn::protocol::uart::SyncInEdge uart_sync_in_edge;
+  if(sync_in_edge == 0)
+    uart_sync_in_edge = SYNCINEDGE_RISING;
+  else if(sync_in_edge == 1)
+    uart_sync_in_edge = SYNCINEDGE_FALLING;
+  else
+  {
+    uart_sync_in_edge = SYNCINEDGE_RISING;
+    ROS_WARN("The SyncInEdge value you positioned does not exist. SyncInEdge positioned to the default value.");
+  }
+  ROS_INFO("SyncInEdge = %d", uart_sync_in_edge);
+  return uart_sync_in_edge;
+}
+
+uint16_t syncInSkipFactor(int sync_in_skip_factor)
+{
+  uint16_t uart_sync_in_skip_factor;
+  if(sync_in_skip_factor < 1 || sync_in_skip_factor > UINT16_MAX)
+  {
+    uart_sync_in_skip_factor = 1;
+    ROS_WARN("The SyncInSkipFactor value you positioned does not exist. SyncInFactor positioned to the default value.");
+  }
+  else
+    uart_sync_in_skip_factor = sync_in_skip_factor;
+  ROS_INFO("SyncInSkipFactor = %d", uart_sync_in_skip_factor);
 }
