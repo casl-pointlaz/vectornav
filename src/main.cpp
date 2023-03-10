@@ -316,6 +316,10 @@ int main(int argc, char * argv[])
   uint16_t uart_sync_in_skip_factor = syncInSkipFactor(sync_in_skip_factor);
   vs.writeSynchronizationControl(uart_sync_in_mode, uart_sync_in_edge, uart_sync_in_skip_factor, SYNCOUTMODE_NONE, SYNCOUTPOLARITY_NEGATIVE, 1, 100000000, true);
 
+  // Reset the SyncInCount, SyncInTime, and SyncOutCount to 0 (useful for the SyncInCount sync with MCU count)
+  vs.writeSynchronizationStatus(0, 0, 0);
+
+
   // Binary Group SetUp
   vn::protocol::uart::CommonGroup commonGroupSetUp = getCommonGroupSetUp(pn);
   vn::protocol::uart::TimeGroup timeGroupSetUp = getTimeGroupSetUp(pn);

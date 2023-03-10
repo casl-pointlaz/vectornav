@@ -27,9 +27,10 @@ git push
 -It's possible that the merge doesn't complete automatically depending on the complexity of Pointlaz's modifications. In this case, be prepared to do a manual merge. You can use the method of your choice, by example using CLION: check https://www.jetbrains.com/help/clion/resolving-conflicts.html#distributed-version-control-systems
 
 ### Configuration
-Run the following command to allow the access to the serial port to your user, then reboot the computer. Without this command, the node will not have access to the serial port.
+Run the following commands to allow the access to the serial port to your user and increase the port baudrate, then reboot the computer. Without this command, the node will not have access to the serial port.
 ```
 sudo adduser $USER dialout
+sudo stty -F /dev/ttyUSB0 921600
 ```
 *NOTE: Replace "$USER" by the name of your user.*
 
