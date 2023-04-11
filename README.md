@@ -26,13 +26,26 @@ git push
 ```
 -It's possible that the merge doesn't complete automatically depending on the complexity of Pointlaz's modifications. In this case, be prepared to do a manual merge. You can use the method of your choice, by example using CLION: check https://www.jetbrains.com/help/clion/resolving-conflicts.html#distributed-version-control-systems
 
-### Configuration
+### Vectornav IMU Configuration
 Run the following commands to allow the access to the serial port to your user and increase the port baudrate, then reboot the computer. Without this command, the node will not have access to the serial port.
 ```
 sudo adduser $USER dialout
 sudo stty -F /dev/ttyUSB0 921600
 ```
 *NOTE: Replace "$USER" by the name of your user.*
+
+#### Launch files configuration
+Even if multiple launch exist in */RosScan/Projects/vectornav/launch*. Only 1 is useful for us:
+- **vectornav.launch**: To operta one vectornav IMU.
+
+This launch file uses the **/vectornav/params/vn100.yaml** parameters file to configure the IMU. You don't need to change anything, but these parameters are important:
+- **serial_port**: The port on which the IMU is connected to your computer.
+- **serial_baud**: The baud rate of the sensor.
+- **async_output_rate**: The data rate in Hz.
+- **timestamp_type**: To choose the type of timestamp you want to use.
+- **use_imu_with_syncincount_msg**: True to use a custom IMU message (*/vectornav/msg/ImuWithCount.msg*) containing the SyncIn count.
+
+___
 
 QuickStart Guide
 ----------------
