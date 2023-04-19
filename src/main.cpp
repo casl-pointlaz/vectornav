@@ -44,7 +44,9 @@
 #include "std_srvs/Empty.h"
 
 #include <vectornav/ImuWithCount.h>
+#include <std_msgs/Int8.h>
 
+ros::Subscriber subScannerState;
 ros::Publisher pubIMUWithCount, pubIMU, pubMag, pubGPS, pubOdom, pubTemp, pubPres, pubIns;
 ros::ServiceServer resetOdomSrv;
 
@@ -73,6 +75,9 @@ vn::protocol::uart::GpsGroup getGpsGroupSetUp(ros::NodeHandle pn);
 vn::protocol::uart::GpsGroup getGps2GroupSetUp(ros::NodeHandle pn);
 vn::protocol::uart::AttitudeGroup getAttitudeGroupSetUp(ros::NodeHandle pn);
 vn::protocol::uart::InsGroup getInsGroupSetUp(ros::NodeHandle pn);
+
+// Create a VnSensor object and connect to sensor
+VnSensor vs;
 
 // Custom user data to pass to packet callback function
 struct UserData
@@ -108,6 +113,17 @@ struct UserData
   unsigned int imu_stride;
   unsigned int output_stride;
 };
+
+// Callback for /scanner_state topic : reset the SyncInCount when scanner_state == idling (0)
+void callbackScannerState(const std_msgs::Int8::ConstPtr& scanner_state_msg)
+{
+  // If scanner_state == idling
+  if(scanner_state_msg->data == 0)
+  {
+    // Reset the SyncInCount, SyncInTime, and SyncOutCount to 0 (useful for the SyncInCount sync with MCU count)
+    vs.writeSynchronizationStatus(0, 0, 0);
+  }
+}
 
 // Basic loop so we can initilize our covariance parameters above
 boost::array<double, 9ul> setCov(XmlRpc::XmlRpcValue rpc)
@@ -223,8 +239,6 @@ int main(int argc, char * argv[])
   // try to optimize the serial port
   optimize_serial_communication(SensorPort);
 
-  // Create a VnSensor object and connect to sensor
-  VnSensor vs;
 
   // Default baudrate variable
   int defaultBaudrate;
@@ -331,6 +345,9 @@ int main(int argc, char * argv[])
 
   // Set the device info for passing to the packet callback function
   user_data.device_family = vs.determineDeviceFamily();
+
+  // Declare subscriber
+  subScannerState = n.subscribe("/scanner_state", 1000, callbackScannerState);
 
   // Declare publishers
   if (user_data.use_imu_with_syncincount_msg)   // Publisher declaration depending on wanted IMU msg
@@ -1274,9 +1291,9 @@ vn::protocol::uart::SyncInEdge syncInEdgeSetUp(int sync_in_edge)
 uint16_t syncInSkipFactor(int sync_in_skip_factor)
 {
   uint16_t uart_sync_in_skip_factor;
-  if(sync_in_skip_factor < 1 || sync_in_skip_factor > UINT16_MAX)
+  if(sync_in_skip_factor < 0 || sync_in_skip_factor > UINT16_MAX)
   {
-    uart_sync_in_skip_factor = 1;
+    uart_sync_in_skip_factor = 0;
     ROS_WARN("The SyncInSkipFactor value you positioned does not exist. SyncInFactor positioned to the default value.");
   }
   else

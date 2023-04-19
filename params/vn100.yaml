@@ -67,9 +67,9 @@ orientation_covariance: [0.01,  0.0,   0.0,
                             0.0,   0.0,   0.01]
 
 # SyncIn configuration
-sync_in_mode: 0
-sync_in_edge: 56
-sync_in_skip_factor: 70000
+sync_in_mode: 3
+sync_in_edge: 0
+sync_in_skip_factor: 0
 
 # Parameters to choose the fields you want to recover from the sensor
 common_group:
