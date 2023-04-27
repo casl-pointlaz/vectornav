@@ -249,22 +249,25 @@ int main(int argc, char * argv[])
   // to connect with that value first (speed initialization up)
   std::vector<unsigned int> supportedBaudrates = vs.supportedBaudrates();
   supportedBaudrates.insert(supportedBaudrates.begin(), SensorBaudrate);
-  while (!baudSet) {
+  while (!baudSet)
+  {
     // Make this variable only accessible in the while loop
     static int i = 0;
     defaultBaudrate = supportedBaudrates[i];
     ROS_INFO("Connecting with default at %d", defaultBaudrate);
     // Default response was too low and retransmit time was too long by default.
     // They would cause errors
-    vs.setResponseTimeoutMs(1000);  // Wait for up to 1000 ms for response
+    vs.setResponseTimeoutMs(100);  // Wait for up to 1000 ms for response
     vs.setRetransmitDelayMs(50);    // Retransmit every 50 ms
 
     // Acceptable baud rates 9600, 19200, 38400, 57600, 128000, 115200, 230400, 460800, 921600
     // Data sheet says 128000 is a valid baud rate. It doesn't work with the VN100 so it is excluded.
     // All other values seem to work fine.
-    try {
+    try
+    {
       // Connect to sensor at it's default rate
-      if (defaultBaudrate != 128000 && SensorBaudrate != 128000) {
+      if (defaultBaudrate != 128000 && SensorBaudrate != 128000)
+      {
         vs.connect(SensorPort, defaultBaudrate);
         // Issues a change baudrate to the VectorNav sensor and then
         // reconnects the attached serial port at the new baudrate.
@@ -275,7 +278,8 @@ int main(int argc, char * argv[])
       }
     }
     // Catch all oddities
-    catch (...) {
+    catch (...)
+    {
       // Disconnect if we had the wrong default and we were connected
       vs.disconnect();
       ros::Duration(0.2).sleep();
@@ -284,8 +288,10 @@ int main(int argc, char * argv[])
     i++;
     // There are only 9 available data rates, if no connection
     // made yet possibly a hardware malfunction?
-    if (i > 8) {
-      break;
+    if (i > 8)
+    {
+      ROS_INFO("No baud rate found. Baud Rate Scan restarted");
+      i = 0;
     }
   }
 
