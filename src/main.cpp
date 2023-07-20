@@ -47,7 +47,7 @@
 #include <std_msgs/Int8.h>
 
 ros::Subscriber subScannerState;
-ros::Publisher pubIMUWithCount, pubIMU, pubMag, pubGPS, pubOdom, pubTemp, pubPres, pubIns;
+ros::Publisher pubIMU, pubMag, pubGPS, pubOdom, pubTemp, pubPres, pubIns;
 ros::ServiceServer resetOdomSrv;
 
 XmlRpc::XmlRpcValue rpc_temp;
@@ -357,7 +357,7 @@ int main(int argc, char * argv[])
 
   // Declare publishers
   if (user_data.use_imu_with_syncincount_msg)   // Publisher declaration depending on wanted IMU msg
-    pubIMUWithCount = n.advertise<vectornav::ImuWithCount>("vectornav/IMU", 1000);
+    pubIMU = n.advertise<vectornav::ImuWithCount>("vectornav/IMU", 1000);
   else
     pubIMU = n.advertise<sensor_msgs::Imu>("vectornav/IMU", 1000);
 
@@ -875,12 +875,21 @@ void BinaryAsyncMessageReceived(void * userData, Packet & p, size_t index)
   if ((pkg_count % user_data->imu_stride) == 0) {
     sensor_msgs::Imu msgIMU;
     fill_imu_message(msgIMU, cd, time, user_data);
-    if(user_data->use_imu_with_syncincount_msg && cd.hasSyncInCnt())
+    if(user_data->use_imu_with_syncincount_msg)
     {
       vectornav::ImuWithCount msgIMUWithCount;
       msgIMUWithCount.imu = msgIMU;
-      msgIMUWithCount.count = cd.syncInCnt();
-      pubIMUWithCount.publish(msgIMUWithCount);
+
+      // Check if IMU msg contains a SyncInCount. If not, set count to NULL
+      if(cd.hasSyncInCnt())
+        msgIMUWithCount.count = cd.syncInCnt();
+      else
+      {
+        msgIMUWithCount.count = -1;
+        ROS_WARN_STREAM("IMU message does not contain SyncInCount.");
+        ROS_WARN_STREAM("The message is: " << msgIMU);
+      }
+      pubIMU.publish(msgIMUWithCount);
     }
     else
       pubIMU.publish(msgIMU);
@@ -1305,4 +1314,6 @@ uint16_t syncInSkipFactor(int sync_in_skip_factor)
   else
     uart_sync_in_skip_factor = sync_in_skip_factor;
   ROS_INFO("SyncInSkipFactor = %d", uart_sync_in_skip_factor);
+
+  return uart_sync_in_skip_factor;
 }
