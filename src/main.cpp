@@ -882,14 +882,15 @@ void BinaryAsyncMessageReceived(void * userData, Packet & p, size_t index)
 
       // Check if IMU msg contains a SyncInCount. If not, set count to NULL
       if(cd.hasSyncInCnt())
+      {
         msgIMUWithCount.count = cd.syncInCnt();
+        pubIMU.publish(msgIMUWithCount);
+      }
       else
       {
-        msgIMUWithCount.count = -1;
         ROS_WARN_STREAM("IMU message does not contain SyncInCount.");
         ROS_WARN_STREAM("The message is: " << msgIMU);
       }
-      pubIMU.publish(msgIMUWithCount);
     }
     else
       pubIMU.publish(msgIMU);
