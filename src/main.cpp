@@ -120,6 +120,8 @@ void callbackScannerState(const std_msgs::Int8::ConstPtr& scanner_state_msg)
   // If scanner_state == idling
   if(scanner_state_msg->data == 0)
   {
+    // Sleep to wait for the reset
+    usleep(100000);
     // Reset the SyncInCount, SyncInTime, and SyncOutCount to 0 (useful for the SyncInCount sync with MCU count)
     vs.writeSynchronizationStatus(0, 0, 0);
   }
