@@ -1,5 +1,5 @@
 # Defined in udev rules, change according to your system. Typically /dev/ttyUSB0
-serial_port: /dev/ttyUSB0
+serial_port: /dev/ttyIMU
 
 # Added by agruet
 # Choose which mode you want to use for the output messages on the serial ports (see page 33 of the VN-100 User Manual)
