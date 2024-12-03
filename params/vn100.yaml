@@ -7,7 +7,7 @@ serial_port: /dev/ttyIMU
 # 1 = Message is sent out serial port 1 at a fixed rate
 # 2 = Message is sent out serial port 2 at a fixed rate.
 # 3 = Message is sent out both serial ports at a fixed rate.
-async_mode: 2
+async_mode: 1
 
 # Acceptable baud rates : 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600
 # Datasheet states 128000 works but from experiments it does not.
