@@ -15,7 +15,7 @@ serial_baud: 921600
 
 # Acceptable data rates in Hz: 1, 2, 4, 5, 10, 20, 25, 40, 50, 100, 200
 # Baud rate must be able to handle the data rate
-async_output_rate: 800
+async_output_rate: 400
 
 # Device IMU Rate as set by the manufacturer (800Hz unless specified otherwise)
 # This value is used to set the serial data packet rate
@@ -77,7 +77,7 @@ common_group:
   get_timestartup:      false
   get_timegps:          false
   get_timesyncin:       true
-  get_yawpitchroll:     true
+  get_yawpitchroll:     false
   get_quaternion:       true
   get_angularrate:      true
   get_position:         false
@@ -119,7 +119,7 @@ imu_group:
   get_senssat:          false
 
 attitude_group:
-  use_group:            true
+  use_group:            false
   get_vpestatus:        false
   get_yawpitchroll:     false
   get_quaternion:       false
@@ -128,7 +128,7 @@ attitude_group:
   get_accelned:         false
   get_linearaccelbody:  false
   get_linearaccelned:   false
-  get_ypru:             true
+  get_ypru:             false
   get_heave:            false
 
 #gps_group:       # Not used for the VN-100 sensor, because the sensor does not have a GPS integrated
