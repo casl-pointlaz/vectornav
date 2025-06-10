@@ -44,10 +44,11 @@
 #include "std_srvs/Empty.h"
 
 #include <vectornav/ImuWithCount.h>
-#include <std_msgs/Int8.h>
+#include <std_msgs/Bool.h>
+#include <std_msgs/String.h>
 
-ros::Subscriber subScannerState;
-ros::Publisher pubIMU, pubMag, pubGPS, pubOdom, pubTemp, pubPres, pubIns;
+ros::Subscriber subSyncMcu;
+ros::Publisher pubIMU, pubMag, pubGPS, pubOdom, pubTemp, pubPres, pubIns, pubSyncSensors;
 ros::ServiceServer resetOdomSrv;
 
 XmlRpc::XmlRpcValue rpc_temp;
@@ -114,16 +115,16 @@ struct UserData
   unsigned int output_stride;
 };
 
-// Callback for /scanner_state topic : reset the SyncInCount when scanner_state == idling (0)
-void callbackScannerState(const std_msgs::Int8::ConstPtr& scanner_state_msg)
+// Callback for /sync_mcu topic : reset the SyncInCount when sync_mcu == true
+void callbackSyncMcu(const std_msgs::Bool::ConstPtr& sync_mcu_msg)
 {
-  // If scanner_state == idling
-  if(scanner_state_msg->data == 0)
+  if(sync_mcu_msg->data)
   {
-    // Sleep to wait for the reset
-    usleep(100000);
     // Reset the SyncInCount, SyncInTime, and SyncOutCount to 0 (useful for the SyncInCount sync with MCU count)
     vs.writeSynchronizationStatus(0, 0, 0);
+    std_msgs::String syncSensorsMsg;
+    syncSensorsMsg.data = "imu";
+    pubSyncSensors.publish(syncSensorsMsg);
   }
 }
 
@@ -355,7 +356,7 @@ int main(int argc, char * argv[])
   user_data.device_family = vs.determineDeviceFamily();
 
   // Declare subscriber
-  subScannerState = n.subscribe("/scanner_state", 1000, callbackScannerState);
+  subSyncMcu = n.subscribe("/sync_mcu", 1000, callbackSyncMcu);
 
   // Declare publishers
   if (user_data.use_imu_with_syncincount_msg)   // Publisher declaration depending on wanted IMU msg
@@ -376,6 +377,7 @@ int main(int argc, char * argv[])
     pubGPS = n.advertise<sensor_msgs::NavSatFix>("vectornav/GPS", 1000);
   if (user_data.device_family != VnSensor::Family::VnSensor_Family_Vn100 && insGroupSetUp != 0)
     pubIns = n.advertise<vectornav::Ins>("vectornav/INS", 1000);
+  pubSyncSensors = n.advertise<std_msgs::String>("vectornav/INS", 1000);
 
   // Make sure no generic async output is registered
   vs.writeAsyncDataOutputType(VNOFF);
