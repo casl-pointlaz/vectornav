@@ -125,10 +125,11 @@ void callbackSyncMcu(const std_msgs::Bool::ConstPtr& sync_mcu_msg)
     std_msgs::String syncSensorsMsg;
     syncSensorsMsg.data = "imu";
     pubSyncSensors.publish(syncSensorsMsg);
+    ROS_INFO_STREAM("[vectornav] IMU syncronized");
   }
   else
   {
-    ROS_INFO_STREAM("[vectornav] IMU not syncronized, so the IMU will not be syncronized");
+    ROS_INFO_STREAM("[vectornav] MCU not syncronized, so the IMU will not be syncronized");
   }
 }
 
