@@ -126,6 +126,10 @@ void callbackSyncMcu(const std_msgs::Bool::ConstPtr& sync_mcu_msg)
     syncSensorsMsg.data = "imu";
     pubSyncSensors.publish(syncSensorsMsg);
   }
+  else
+  {
+    ROS_INFO_STREAM("[vectornav] IMU not syncronized, so the IMU will not be syncronized");
+  }
 }
 
 // Basic loop so we can initilize our covariance parameters above
