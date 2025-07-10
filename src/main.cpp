@@ -341,6 +341,32 @@ int main(int argc, char * argv[])
   // Reset the SyncInCount, SyncInTime, and SyncOutCount to 0 (useful for the SyncInCount sync with MCU count)
   vs.writeSynchronizationStatus(0, 0, 0);
 
+  // Set Heading Mode to Indoor
+  vs.writeVpeBasicControl(
+    vn::protocol::uart::VpeEnable::VPEENABLE_ENABLE,
+    vn::protocol::uart::HeadingMode::HEADINGMODE_INDOOR,
+    vn::protocol::uart::VpeMode::VPEMODE_MODE1,
+    vn::protocol::uart::VpeMode::VPEMODE_MODE1);
+
+  vn::sensors::VpeBasicControlRegister vpe = vs.readVpeBasicControl();
+  std::string headingMode;
+  switch (vpe.headingMode)
+  {
+    case vn::protocol::uart::HeadingMode::HEADINGMODE_ABSOLUTE:
+      headingMode = "Absolute";
+      break;
+    case vn::protocol::uart::HeadingMode::HEADINGMODE_RELATIVE:
+      headingMode = "Relative";
+      break;
+    case vn::protocol::uart::HeadingMode::HEADINGMODE_INDOOR:
+      headingMode = "Indoor";
+      break;
+    default:
+      headingMode = "Unknown";
+      break;
+  }
+  ROS_INFO_STREAM("Heading mode : " << headingMode);
+
 
   // Binary Group SetUp
   vn::protocol::uart::CommonGroup commonGroupSetUp = getCommonGroupSetUp(pn);
