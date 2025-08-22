@@ -13,9 +13,17 @@ async_mode: 1
 # Datasheet states 128000 works but from experiments it does not.
 serial_baud: 921600
 
-# Acceptable data rates in Hz: 1, 2, 4, 5, 10, 20, 25, 40, 50, 100, 200
+# Barometer, GPS, INS, Magnetic, Odometry, and Temperature Messages Output Rate
+# Acceptable ASCII data rates in Hz: 1, 2, 4, 5, 10, 20, 25, 40, 50, 100, 200
+# Acceptable Binary data rates in Hz: 1 to 800
 # Baud rate must be able to handle the data rate
-async_output_rate: 800
+async_output_rate: 400
+
+# IMU Messages Output Rate
+# Acceptable ASCII data rates in Hz: 1, 2, 4, 5, 10, 20, 25, 40, 50, 100, 200
+# Acceptable Binary data rates in Hz: 1 to 800
+# Baud rate must be able to handle the data rate
+imu_output_rate: 400
 
 # Device IMU Rate as set by the manufacturer (800Hz unless specified otherwise)
 # This value is used to set the serial data packet rate
@@ -77,7 +85,7 @@ common_group:
   get_timestartup:      false
   get_timegps:          false
   get_timesyncin:       true
-  get_yawpitchroll:     true
+  get_yawpitchroll:     false
   get_quaternion:       true
   get_angularrate:      true
   get_position:         false
