@@ -108,10 +108,6 @@ struct UserData
 
   // Use IMU msg with count field or not
   bool use_imu_with_syncincount_msg{false};
-
-  // strides
-  unsigned int imu_stride;
-  unsigned int output_stride;
 };
 
 // Callback for /scanner_state topic : reset the SyncInCount when scanner_state == idling (0)
@@ -198,7 +194,6 @@ int main(int argc, char * argv[])
   string SensorPort;
   int SensorBaudrate;
   int async_output_rate;
-  int imu_output_rate;
 
   // Sensor IMURATE (800Hz by default, used to configure device)
   int SensorImuRate;
@@ -213,8 +208,7 @@ int main(int argc, char * argv[])
   pn.param<bool>("tf_ned_to_enu", user_data.tf_ned_to_enu, false);
   pn.param<bool>("frame_based_enu", user_data.frame_based_enu, false);
   pn.param<bool>("adjust_ros_timestamp", user_data.adjust_ros_timestamp, false);
-  pn.param<int>("async_output_rate", async_output_rate, 40);
-  pn.param<int>("imu_output_rate", imu_output_rate, async_output_rate);
+  pn.param<int>("async_output_rate", async_output_rate, 400);
   pn.param<std::string>("serial_port", SensorPort, "/dev/ttyUSB0");
   pn.param<int>("serial_baud", SensorBaudrate, 115200);
   pn.param<int>("fixed_imu_rate", SensorImuRate, 800);
@@ -314,10 +308,7 @@ int main(int argc, char * argv[])
   ROS_INFO("Model Number: %s, Firmware Version: %s", mn.c_str(), fv.c_str());
   ROS_INFO("Hardware Revision : %d, Serial Number : %d", hv, sn);
 
-  user_data.imu_stride = 1;
-  user_data.output_stride = 1;
-  ROS_INFO("General Publish Rate: %d Hz", async_output_rate);
-  ROS_INFO("IMU Publish Rate: %d Hz", imu_output_rate);
+  ROS_INFO("Publish Rate: %d Hz", async_output_rate);
 
   // SyncIn SetUp
   vn::protocol::uart::SyncInMode uart_sync_in_mode =  syncInModeSetUp(sync_in_mode);
@@ -353,7 +344,6 @@ int main(int argc, char * argv[])
       break;
   }
   ROS_INFO_STREAM("Heading mode : " << headingMode);
-
 
   // Binary Group SetUp
   vn::protocol::uart::CommonGroup commonGroupSetUp = getCommonGroupSetUp(pn);
@@ -396,7 +386,7 @@ int main(int argc, char * argv[])
   // Configure binary output message
   BinaryOutputRegister bor(
     async_mode,
-    SensorImuRate / imu_output_rate,
+    SensorImuRate / async_output_rate,
     commonGroupSetUp,
     timeGroupSetUp,
     imuGroupSetUp,
@@ -862,9 +852,6 @@ static ros::Time get_time_stamp(vn::sensors::CompositeData & cd, UserData * user
 //
 void BinaryAsyncMessageReceived(void * userData, Packet & p, size_t index)
 {
-  // package counter to calculate strides
-  static unsigned long long pkg_count = 0;
-
   // evaluate time first, to have it as close to the measurement time as possible
   const ros::Time ros_time = ros::Time::now();
 
@@ -872,81 +859,77 @@ void BinaryAsyncMessageReceived(void * userData, Packet & p, size_t index)
   UserData * user_data = static_cast<UserData *>(userData);
   ros::Time time = get_time_stamp(cd, user_data, ros_time);
 
-  // IMU
-  if ((pkg_count % user_data->imu_stride) == 0) {
-    sensor_msgs::Imu msgIMU;
-    fill_imu_message(msgIMU, cd, time, user_data);
-    if(user_data->use_imu_with_syncincount_msg)
-    {
-      vectornav::ImuWithCount msgIMUWithCount;
-      msgIMUWithCount.imu = msgIMU;
+  sensor_msgs::Imu msgIMU;
+  fill_imu_message(msgIMU, cd, time, user_data);
+  if(user_data->use_imu_with_syncincount_msg)
+  {
+    vectornav::ImuWithCount msgIMUWithCount;
+    msgIMUWithCount.imu = msgIMU;
 
-      // Check if IMU msg contains a SyncInCount. If not, set count to NULL
-      if(cd.hasSyncInCnt())
-      {
-        msgIMUWithCount.count = cd.syncInCnt();
-        pubIMU.publish(msgIMUWithCount);
-      }
-      else
-      {
-        ROS_WARN_STREAM("IMU message does not contain SyncInCount.");
-        ROS_WARN_STREAM("The message is: " << msgIMU);
-      }
+    // Check if IMU msg contains a SyncInCount. If not, set count to NULL
+    if(cd.hasSyncInCnt())
+    {
+      msgIMUWithCount.count = cd.syncInCnt();
+      pubIMU.publish(msgIMUWithCount);
     }
     else
-      pubIMU.publish(msgIMU);
-  }
-
-  if ((pkg_count % user_data->output_stride) == 0) {
-    // Magnetic Field
-    if (pubMag.getNumSubscribers() > 0) {
-      sensor_msgs::MagneticField msgMag;
-      fill_mag_message(msgMag, cd, time, user_data);
-      pubMag.publish(msgMag);
-    }
-
-    // Temperature
-    if (pubTemp.getNumSubscribers() > 0) {
-      sensor_msgs::Temperature msgTemp;
-      fill_temp_message(msgTemp, cd, time, user_data);
-      pubTemp.publish(msgTemp);
-    }
-
-    // Barometer
-    if (pubPres.getNumSubscribers() > 0) {
-      sensor_msgs::FluidPressure msgPres;
-      fill_pres_message(msgPres, cd, time, user_data);
-      pubPres.publish(msgPres);
-    }
-
-    // GPS
-    if (
-      user_data->device_family != VnSensor::Family::VnSensor_Family_Vn100 &&
-      pubGPS.getNumSubscribers() > 0) {
-      sensor_msgs::NavSatFix msgGPS;
-      fill_gps_message(msgGPS, cd, time, user_data);
-      pubGPS.publish(msgGPS);
-    }
-
-    // Odometry
-    if (
-      user_data->device_family != VnSensor::Family::VnSensor_Family_Vn100 &&
-      pubOdom.getNumSubscribers() > 0) {
-      nav_msgs::Odometry msgOdom;
-      fill_odom_message(msgOdom, cd, time, user_data);
-      pubOdom.publish(msgOdom);
-    }
-
-    // INS
-    if (
-      user_data->device_family != VnSensor::Family::VnSensor_Family_Vn100 &&
-      pubIns.getNumSubscribers() > 0) {
-      vectornav::Ins msgINS;
-      fill_ins_message(msgINS, cd, time, user_data);
-      pubIns.publish(msgINS);
+    {
+      ROS_WARN_STREAM("IMU message does not contain SyncInCount.");
+      ROS_WARN_STREAM("The message is: " << msgIMU);
     }
   }
-  pkg_count += 1;
+  else
+  {
+    pubIMU.publish(msgIMU);
+  }
+
+  // Magnetic Field
+  if (pubMag.getNumSubscribers() > 0) {
+    sensor_msgs::MagneticField msgMag;
+    fill_mag_message(msgMag, cd, time, user_data);
+    pubMag.publish(msgMag);
+  }
+
+  // Temperature
+  if (pubTemp.getNumSubscribers() > 0) {
+    sensor_msgs::Temperature msgTemp;
+    fill_temp_message(msgTemp, cd, time, user_data);
+    pubTemp.publish(msgTemp);
+  }
+
+  // Barometer
+  if (pubPres.getNumSubscribers() > 0) {
+    sensor_msgs::FluidPressure msgPres;
+    fill_pres_message(msgPres, cd, time, user_data);
+    pubPres.publish(msgPres);
+  }
+
+  // GPS
+  if (
+    user_data->device_family != VnSensor::Family::VnSensor_Family_Vn100 &&
+    pubGPS.getNumSubscribers() > 0) {
+    sensor_msgs::NavSatFix msgGPS;
+    fill_gps_message(msgGPS, cd, time, user_data);
+    pubGPS.publish(msgGPS);
+  }
+
+  // Odometry
+  if (
+    user_data->device_family != VnSensor::Family::VnSensor_Family_Vn100 &&
+    pubOdom.getNumSubscribers() > 0) {
+    nav_msgs::Odometry msgOdom;
+    fill_odom_message(msgOdom, cd, time, user_data);
+    pubOdom.publish(msgOdom);
+  }
+
+  // INS
+  if (
+    user_data->device_family != VnSensor::Family::VnSensor_Family_Vn100 &&
+    pubIns.getNumSubscribers() > 0) {
+    vectornav::Ins msgINS;
+    fill_ins_message(msgINS, cd, time, user_data);
+    pubIns.publish(msgINS);
+  }
 }
 
 vn::protocol::uart::CommonGroup getCommonGroupSetUp(ros::NodeHandle pn)
